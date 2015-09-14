@@ -3422,7 +3422,7 @@ status_t AudioHardware::AudioStreamInVoip::standby()
 #endif /*QCOM_FM_ENABLED*/
             ) {
                    enableDevice(temp->dev_id, 0);
-                   ALOGV("VOIPin: disable voip rx");
+                   ALOGV("Voipin: disable voip rx");
             }
             if(!getNodeByStreamType(VOICE_CALL) && !getNodeByStreamType(PCM_REC)) {
                  enableDevice(temp->dev_id_tx,0);
@@ -5798,10 +5798,10 @@ void AudioHardware::AudioSessionOutTunnel::reset()
 #ifdef QCOM_VOIP_ENABLED
         && !getNodeByStreamType(VOIP_CALL)
 #endif
-       ) {
-            if (enableDevice(cur_rx, 0)) {
-                ALOGE("AudioSessionOutTunnel::resetDisabling device failed for cur_rx %d", cur_rx);
-            }
+     ) {
+        if (enableDevice(cur_rx, 0)) {
+            ALOGE("AudioSessionOutTunnel::resetDisabling device failed for cur_rx %d", cur_rx);
+        }
     }
 
     ALOGD("AudioSessionOutTunnel::reset:dealloc buffers");
