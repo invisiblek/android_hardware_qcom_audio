@@ -35,10 +35,6 @@ extern "C" {
 #include <sched.h>
 #include <utils/Log.h>
 
-#ifdef _ANDROID_
-#define LOG_TAG "QC_AACENC"
-#endif
-
 #ifndef LOGE
 #define LOGE ALOGE
 #endif
