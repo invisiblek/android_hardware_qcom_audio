@@ -314,6 +314,7 @@ static status_t out_stop(struct audio_stream_out *stream)
         reinterpret_cast<struct qcom_stream_out *>(stream);
     return out->qcom_out->stop();
 }
+#endif
 
 #endif //QCOM_TUNNEL_LPA_ENABLED
 static int out_add_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
