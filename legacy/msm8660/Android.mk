@@ -8,7 +8,7 @@ ifeq ($(strip $(QCOM_FM_ENABLED)),true)
   common_cflags += -DQCOM_FM_ENABLED
 endif
 
-ifneq ($(strip $(QCOM_TUNNEL_LPA_ENABLED)),false)
+ifeq ($(BOARD_QCOM_TUNNEL_LPA_ENABLED),true)
   common_cflags += -DQCOM_TUNNEL_LPA_ENABLED
 endif
 
