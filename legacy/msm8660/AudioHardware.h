@@ -124,7 +124,7 @@ enum tty_modes {
 
 #define AUDIO_HW_IN_SAMPLERATE 8000                 // Default audio input sample rate
 #define AUDIO_HW_IN_CHANNELS (AUDIO_CHANNEL_IN_MONO) // Default audio input channel mask
-#define AUDIO_HW_IN_BUFFERSIZE 2048                 // Default audio input buffer size
+#define AUDIO_HW_IN_BUFFERSIZE 480 * 4                 // Default audio input buffer size
 #define AUDIO_HW_IN_FORMAT (AUDIO_FORMAT_PCM_16_BIT)  // Default audio input sample format
 #ifdef QCOM_VOIP_ENABLED
 #define AUDIO_HW_VOIP_BUFFERSIZE_8K 320
@@ -151,6 +151,7 @@ public:
     virtual status_t    setVoiceVolume(float volume);
     virtual status_t    setMasterVolume(float volume);
     virtual status_t    setMode(int mode);
+    virtual status_t setMasterMute(bool muted);
 
     // mic mute
     virtual status_t    setMicMute(bool state);
@@ -159,9 +160,8 @@ public:
     virtual status_t    setParameters(const String8& keyValuePairs);
     virtual String8     getParameters(const String8& keys);
 
-    virtual status_t    setMasterMute(bool muted);
-
     // create I/O streams
+
     virtual AudioStreamOut* openOutputStreamWithFlags(
                                 uint32_t devices,
                                 audio_output_flags_t flags=(audio_output_flags_t)0,
@@ -169,6 +169,7 @@ public:
                                 uint32_t *channels=0,
                                 uint32_t *sampleRate=0,
                                 status_t *status=0);
+
     virtual AudioStreamOut* openOutputStream(
                                 uint32_t devices,
                                 int *format=0,
@@ -183,23 +184,23 @@ public:
                                 status_t *status,
                                 AudioSystem::audio_in_acoustics acoustics);
 
+    virtual    void        closeOutputStream(AudioStreamOut* out);
+    virtual    void        closeInputStream(AudioStreamIn* in);
+
+    virtual    size_t      getInputBufferSize(uint32_t sampleRate, int format, int channelCount);
+               void        clearCurDevice() { mCurSndDevice = -1; }
+
     virtual int createAudioPatch(unsigned int num_sources,
-                               const struct audio_port_config *sources,
-                               unsigned int num_sinks,
-                               const struct audio_port_config *sinks,
-                               audio_patch_handle_t *handle);
+                                const struct audio_port_config *sources,
+                                unsigned int num_sinks,
+                                const struct audio_port_config *sinks,
+                                audio_patch_handle_t *handle);
 
     virtual int releaseAudioPatch(audio_patch_handle_t handle);
 
     virtual int getAudioPort(struct audio_port *port);
 
     virtual int setAudioPortConfig(const struct audio_port_config *config);
-
-    virtual    void        closeOutputStream(AudioStreamOut* out);
-    virtual    void        closeInputStream(AudioStreamIn* in);
-
-    virtual    size_t      getInputBufferSize(uint32_t sampleRate, int format, int channelCount);
-               void        clearCurDevice() { mCurSndDevice = -1; }
 
 protected:
     virtual status_t    dump(int fd, const Vector<String16>& args);
@@ -251,14 +252,33 @@ private:
                                 int *pFormat,
                                 uint32_t *pChannels,
                                 uint32_t *pRate);
-        virtual uint32_t    sampleRate() const { return 48000; }
-        virtual size_t      bufferSize() const { return 5248; }
-
+        virtual uint32_t sampleRate() const {
+            char af_quality[PROP_VALUE_MAX];
+            property_get("af.resampler.quality",af_quality,"0");
+            if(strcmp("255",af_quality) == 0) {
+                ALOGD("SampleRate 48k");
+                return 48000;
+            } else {
+                ALOGD("SampleRate 44.1k");
+                return 44100;
+            }
+        }
+        virtual size_t bufferSize() const {
+            char af_quality[PROP_VALUE_MAX];
+            property_get("af.resampler.quality",af_quality,"0");
+            if(strcmp("255",af_quality) == 0) {
+                ALOGD("Bufsize 5248");
+                return 5248;
+            } else {
+                ALOGD("Bufsize 4800");
+                return 4800;
+            }
+        }
         virtual uint32_t    channels() const { return AUDIO_CHANNEL_OUT_STEREO; }
         virtual int         format() const { return AUDIO_FORMAT_PCM_16_BIT; }
 
         virtual uint32_t    latency() const { return (1000*AUDIO_HW_NUM_OUT_BUF*(bufferSize()/frameSize()))/sampleRate()+AUDIO_HW_OUT_LATENCY_MS; }
-        virtual status_t    setVolume(float left __unused, float right __unused) { return INVALID_OPERATION; }
+        virtual status_t    setVolume(float left, float right) { return INVALID_OPERATION; }
         virtual ssize_t     write(const void* buffer, size_t bytes);
         virtual status_t    standby();
         virtual status_t    dump(int fd, const Vector<String16>& args);
@@ -524,8 +544,6 @@ public:
     // the output has exited standby
     virtual status_t    getRenderPosition(uint32_t *dspFrames);
 
-    virtual status_t getPresentationPosition(uint64_t *frames, struct timespec *timestamp);
-
     virtual status_t    getNextWriteTimestamp(int64_t *timestamp);
     virtual status_t    setObserver(void *observer);
     void* memBufferAlloc(int nSize, int32_t *ion_fd);
@@ -631,7 +649,7 @@ private:
         virtual uint32_t    channels() const { return mChannels; }
         virtual int         format() const { return mFormat; }
         virtual uint32_t    sampleRate() const { return mSampleRate; }
-        virtual status_t    setGain(float gain __unused) { return INVALID_OPERATION; }
+        virtual status_t    setGain(float gain) { return INVALID_OPERATION; }
         virtual ssize_t     read(void* buffer, ssize_t bytes);
         virtual status_t    dump(int fd, const Vector<String16>& args);
         virtual status_t    standby();
