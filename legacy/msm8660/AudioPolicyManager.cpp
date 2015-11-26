@@ -66,7 +66,9 @@ void AudioPolicyManager::setStrategyMute(routing_strategy strategy,
     }
 }
 
-void AudioPolicyManager::releaseOutput(audio_io_handle_t output)
+void AudioPolicyManager::releaseOutput(audio_io_handle_t output,
+                                      audio_stream_type_t stream,
+                                      audio_session_t session)
 {
     ALOGV("releaseOutput() %d", output);
     ssize_t index = mOutputs.indexOfKey(output);
@@ -859,8 +861,8 @@ audio_io_handle_t AudioPolicyManager::getOutput(AudioSystem::stream_type stream,
     return output;
 }
 status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
-                                             AudioSystem::stream_type stream,
-                                             int session)
+                                             audio_stream_type stream,
+                                             audio_session_t session)
 {
     ALOGV("startOutput() output %d, stream %d, session %d", output, stream, session);
     ssize_t index = mOutputs.indexOfKey(output);
@@ -941,8 +943,8 @@ status_t AudioPolicyManager::startOutput(audio_io_handle_t output,
 
 
 status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
-                                            AudioSystem::stream_type stream,
-                                            int session)
+                                            audio_stream_type stream,
+                                            audio_session_t session)
 {
     ALOGV("stopOutput() output %d, stream %d, session %d", output, stream, session);
     ssize_t index = mOutputs.indexOfKey(output);
@@ -965,7 +967,7 @@ status_t AudioPolicyManager::stopOutput(audio_io_handle_t output,
         if (outputDesc->mRefCount[stream] == 0) {
             outputDesc->mStopTime[stream] = systemTime();
 
-            if ((outputDesc->mRefCount[AUDIO_STREAM_RING]!= 0) && (stream == AUDIO_STREAM_VOICE_CALL)) {
+            if ((outputDesc->mRefCount[AUDIO_STREAM_RING]!= 0) && (stream == AudioSystem::VOICE_CALL)) {
                  // When AUDIO_STREAM_RING is present, Send Mute on RING
                  // if it gets stopOutput on  AUDIO_STREAM_VOICE_CALL
                  setStreamMute(AudioSystem::RING, true, mPrimaryOutput);
@@ -1072,7 +1074,7 @@ audio_io_handle_t AudioPolicyManager::getInput(int inputSource,
         (samplingRate != inputDesc->mSamplingRate) ||
         (format != inputDesc->mFormat) ||
         (channelMask != inputDesc->mChannelMask)) {
-        ALOGI("getInput() failed opening input: samplingRate %d, format %d, channelMask %d",
+        ALOGI("getInput() failed opening input: samplingRate %d, format %d, channelMask %x",
                 samplingRate, format, channelMask);
         if (input != 0) {
             mpClientInterface->closeInput(input);
@@ -1477,6 +1479,7 @@ AudioPolicyManager::routing_strategy AudioPolicyManager::getStrategy(
         // while key clicks are played produces a poor result
     case AudioSystem::TTS:
     case AudioSystem::MUSIC:
+    case AudioSystem::INCALL_MUSIC:
         return STRATEGY_MEDIA;
     case AudioSystem::ENFORCED_AUDIBLE:
         return STRATEGY_ENFORCED_AUDIBLE;
@@ -2112,7 +2115,7 @@ bool AudioPolicyManager::isCompatibleProfile(AudioPolicyManagerBase::IOProfile *
                                              uint32_t samplingRate,
                                              audio_format_t format,
                                              audio_channel_mask_t channelMask,
-                                            audio_output_flags_t flags)
+                                             audio_output_flags_t flags)
 {
     if ((profile->mSupportedDevices & device) != device) {
         return false;

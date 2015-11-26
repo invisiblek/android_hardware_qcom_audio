@@ -84,9 +84,6 @@ static uint32_t audio_device_conv_table[][HAL_API_REV_NUM] =
 #ifdef QCOM_FM_TX_ENABLED
     { AudioSystem::DEVICE_OUT_FM_TX, AUDIO_DEVICE_OUT_FM_TX },
 #endif
-#ifdef QCOM_VOIP_ENABLED
-    //{ AudioSystem::DEVICE_OUT_DIRECTOUTPUT, AUDIO_DEVICE_OUT_DIRECTOUTPUT },
-#endif
     /* input devices */
     { AudioSystem::DEVICE_IN_COMMUNICATION, AUDIO_DEVICE_IN_COMMUNICATION },
     { AudioSystem::DEVICE_IN_AMBIENT, AUDIO_DEVICE_IN_AMBIENT },
@@ -137,7 +134,7 @@ static uint32_t out_get_sample_rate(const struct audio_stream *stream)
     return out->qcom_out->sampleRate();
 }
 
-static int out_set_sample_rate(struct audio_stream *stream, uint32_t rate)
+static int out_set_sample_rate(struct audio_stream *stream, uint32_t rate __unused)
 {
     struct qcom_stream_out *out =
         reinterpret_cast<struct qcom_stream_out *>(stream);
@@ -168,7 +165,7 @@ static audio_format_t out_get_format(const struct audio_stream *stream)
     return (audio_format_t)out->qcom_out->format();
 }
 
-static int out_set_format(struct audio_stream *stream, audio_format_t format)
+static int out_set_format(struct audio_stream *stream, audio_format_t format __unused)
 {
     struct qcom_stream_out *out =
         reinterpret_cast<struct qcom_stream_out *>(stream);
@@ -262,73 +259,18 @@ static int out_get_render_position(const struct audio_stream_out *stream,
     return out->qcom_out->getRenderPosition(dsp_frames);
 }
 
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-static int out_set_observer(const struct audio_stream_out *stream,
-                                   void *observer)
-{
-    const struct qcom_stream_out *out =
-        reinterpret_cast<const struct qcom_stream_out *>(stream);
-    return out->qcom_out->setObserver(observer);
-}
-
-static int out_get_buffer_info(const struct audio_stream_out *stream,
-                                   buf_info ** buf)
-{
-    const struct qcom_stream_out *out =
-        reinterpret_cast<const struct qcom_stream_out *>(stream);
-    return out->qcom_out->getBufferInfo(buf);
-}
-
-static int out_is_buffer_available(const struct audio_stream_out *stream,
-                                   int *isAvail)
-{
-    const struct qcom_stream_out *out =
-        reinterpret_cast<const struct qcom_stream_out *>(stream);
-    return out->qcom_out->isBufferAvailable(isAvail);
-}
-
-static status_t out_start(struct audio_stream_out *stream)
-{
-    struct qcom_stream_out *out =
-        reinterpret_cast<struct qcom_stream_out *>(stream);
-    return out->qcom_out->start();
-}
-
-static status_t out_pause(struct audio_stream_out *stream)
-{
-    struct qcom_stream_out *out =
-        reinterpret_cast<struct qcom_stream_out *>(stream);
-    return out->qcom_out->pause();
-}
-
-static status_t out_flush(struct audio_stream_out *stream)
-{
-    struct qcom_stream_out *out =
-        reinterpret_cast<struct qcom_stream_out *>(stream);
-    return out->qcom_out->flush();
-}
-
-static status_t out_stop(struct audio_stream_out *stream)
-{
-    struct qcom_stream_out *out =
-        reinterpret_cast<struct qcom_stream_out *>(stream);
-    return out->qcom_out->stop();
-}
-#endif
-
-#endif //QCOM_TUNNEL_LPA_ENABLED
-static int out_add_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
+static int out_add_audio_effect(const struct audio_stream *stream __unused, effect_handle_t effect __unused)
 {
     return 0;
 }
 
-static int out_remove_audio_effect(const struct audio_stream *stream, effect_handle_t effect)
+static int out_remove_audio_effect(const struct audio_stream *stream __unused, effect_handle_t effect __unused)
 {
     return 0;
 }
 
-static int out_get_next_write_timestamp(const struct audio_stream_out *stream,
-                                        int64_t *timestamp)
+static int out_get_next_write_timestamp(const struct audio_stream_out *stream __unused,
+                                        int64_t *timestamp __unused)
 {
     const struct qcom_stream_out *out =
         reinterpret_cast<const struct qcom_stream_out *>(stream);
@@ -351,7 +293,7 @@ static uint32_t in_get_sample_rate(const struct audio_stream *stream)
     return in->qcom_in->sampleRate();
 }
 
-static int in_set_sample_rate(struct audio_stream *stream, uint32_t rate)
+static int in_set_sample_rate(struct audio_stream *stream, uint32_t rate __unused)
 {
     struct qcom_stream_in *in =
         reinterpret_cast<struct qcom_stream_in *>(stream);
@@ -382,7 +324,7 @@ static audio_format_t in_get_format(const struct audio_stream *stream)
     return (audio_format_t)in->qcom_in->format();
 }
 
-static int in_set_format(struct audio_stream *stream, audio_format_t format)
+static int in_set_format(struct audio_stream *stream, audio_format_t format __unused)
 {
     struct qcom_stream_in *in =
         reinterpret_cast<struct qcom_stream_in *>(stream);
@@ -608,14 +550,14 @@ static size_t adev_get_input_buffer_size(const struct audio_hw_device *dev,
     return qadev->hwif->getInputBufferSize(config->sample_rate,config->format,channelCount);
 }
 
-
 static int adev_open_output_stream(struct audio_hw_device *dev,
-                                   audio_io_handle_t handle,
+                                   audio_io_handle_t handle __unused,
                                    audio_devices_t devices,
                                    audio_output_flags_t flags,
                                    struct audio_config *config,
                                    struct audio_stream_out **stream_out,
-				   const char *address __unused)
+                                   const char * address __unused)
+
 {
     struct qcom_audio_device *qadev = to_ladev(dev);
     status_t status;
@@ -655,15 +597,6 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     out->stream.write = out_write;
     out->stream.get_render_position = out_get_render_position;
     out->stream.get_next_write_timestamp = out_get_next_write_timestamp;
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-    out->stream.start = out_start;
-    out->stream.pause = out_pause;
-    out->stream.flush = out_flush;
-    out->stream.stop = out_stop;
-    out->stream.set_observer = out_set_observer;
-    out->stream.get_buffer_info = out_get_buffer_info;
-    out->stream.is_buffer_available = out_is_buffer_available;
-#endif
     *stream_out = &out->stream;
     return 0;
 
@@ -685,14 +618,12 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
 
 /** This method creates and opens the audio hardware input stream */
 static int adev_open_input_stream(struct audio_hw_device *dev,
-                                  audio_io_handle_t handle,
+                                  audio_io_handle_t handle __unused,
                                   audio_devices_t devices,
-                                  struct audio_config *config,
-                                  struct audio_stream_in **stream_in,
-                                  audio_input_flags_t flags,
-                                  const char *address __unused,
+                                  audio_config *config,
+                                  audio_stream_in **stream_in, audio_input_flags_t flags __unused,
+                                  const char * address __unused,
                                   audio_source_t source __unused)
-
 {
     struct qcom_audio_device *qadev = to_ladev(dev);
     status_t status;

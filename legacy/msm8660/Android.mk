@@ -11,18 +11,6 @@ ifeq ($(QCOM_FM_ENABLED),true)
   common_cflags += -DQCOM_FM_ENABLED
 endif
 
-ifeq ($(BOARD_QCOM_TUNNEL_LPA_ENABLED),true)
-  common_cflags += -DQCOM_TUNNEL_LPA_ENABLED
-endif
-
-ifeq ($(BOARD_QCOM_VOIP_ENABLED),true)
-  common_cflags += -DQCOM_VOIP_ENABLED
-endif
-
-ifeq ($(BOARD_QCOM_TUNNEL_PLAYBACK_ENABLED),true)
-  common_cflags += -DTUNNEL_PLAYBACK
-endif
-
 ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
   common_cflags += -DQCOM_ACDB_ENABLED
 endif
@@ -75,7 +63,7 @@ LOCAL_MODULE := audio.primary.msm8660
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_MODULE_TAGS := optional
 
-LOCAL_CFLAGS += -fno-short-enums -Wno-type-limits -Wno-pointer-arith -Wno-sign-compare -Wno-reorder -Wno-format -Wno-conversion-null -Wno-strict-aliasing -Wno-return-type -Wno-missing-field-initializers
+LOCAL_CFLAGS += -fno-short-enums
 
 LOCAL_C_INCLUDES := $(TARGET_OUT_HEADERS)/mm-audio/audio-alsa
 LOCAL_C_INCLUDES += $(TARGET_OUT_HEADERS)/mm-audio/audcal
@@ -91,7 +79,7 @@ LOCAL_ADDITIONAL_DEPENDENCIES := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr
 LOCAL_CFLAGS += $(common_cflags) -Wno-error
 
 include $(BUILD_SHARED_LIBRARY)
-
+ifeq ($(USE_LEGACY_AUDIO_POLICY), 1)
 # The audio policy is implemented on top of legacy policy code
 include $(CLEAR_VARS)
 
@@ -121,6 +109,7 @@ LOCAL_C_INCLUDES += hardware/libhardware_legacy/audio
 LOCAL_CFLAGS += $(common_cflags) -Wno-error
 
 include $(BUILD_SHARED_LIBRARY)
+endif
 
 # Load audio_policy.conf to system/etc/
 include $(CLEAR_VARS)
