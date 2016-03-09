@@ -9,7 +9,6 @@ include $(MY_LOCAL_PATH)/legacy/Android.mk
 else
 include $(MY_LOCAL_PATH)/hal/Android.mk
 endif
-
 endif
 
 endif
