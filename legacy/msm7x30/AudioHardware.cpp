@@ -110,8 +110,6 @@ static const uint32_t SND_DEVICE_TTY_HCO = 12;
 static const uint32_t SND_DEVICE_TTY_VCO = 13;
 static const uint32_t SND_DEVICE_TTY_FULL = 14;
 static const uint32_t SND_DEVICE_HDMI = 15;
-static const uint32_t SND_DEVICE_FM_TX = 16;
-static const uint32_t SND_DEVICE_FM_TX_AND_SPEAKER = 17;
 static const uint32_t SND_DEVICE_HEADPHONE_AND_SPEAKER = 18;
 static const uint32_t SND_DEVICE_BACK_MIC_CAMCORDER = 33;
 #ifdef HTC_AUDIO
@@ -247,14 +245,6 @@ FM_A2DP,
 #endif
 INVALID_STREAM
 };
-
-typedef struct ComboDeviceType
-{
-    uint32_t DeviceId;
-    STREAM_TYPES StreamType;
-}CurrentComboDeviceStruct;
-CurrentComboDeviceStruct CurrentComboDeviceData;
-Mutex   mComboDeviceLock;
 
 #ifdef QCOM_FM_ENABLED
 enum FM_STATE {
@@ -761,9 +751,6 @@ AudioHardware::AudioHardware() :
 #ifdef WITH_QCOM_CALIBRATION
         audcal_initialize();
 #endif
-
-        CurrentComboDeviceData.DeviceId = INVALID_DEVICE;
-        CurrentComboDeviceData.StreamType = INVALID_STREAM;
 
 #ifdef HTC_AUDIO
     // HTC specific functions
@@ -1774,13 +1761,6 @@ static status_t do_route_audio_rpc(uint32_t device,
         new_tx_device = cur_tx;
         ALOGV("In DEVICE_HDMI_STERO_RX and cur_tx");
     }
-#ifdef QCOM_FM_ENABLED
-    else if (device == SND_DEVICE_FM_TX) {
-        new_rx_device = DEVICE_FMRADIO_STEREO_RX;
-        new_tx_device = cur_tx;
-        ALOGV("In DEVICE_FMRADIO_STEREO_RX and cur_tx");
-    }
-#endif
 #ifdef SAMSUNG_AUDIO
     else if (device == SND_DEVICE_VOIP_HANDSET) {
         new_rx_device = DEVICE_HANDSET_VOIP_RX;
@@ -2506,15 +2486,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input, uint32_t outputDe
             sndDevice = SND_DEVICE_HEADSET_AND_SPEAKER;
             audProcess = (ADRC_ENABLE | EQ_ENABLE | RX_IIR_ENABLE | MBADRC_ENABLE);
         }
-#ifdef QCOM_FM_ENABLED
-        else if ((outputDevices & AudioSystem::DEVICE_OUT_FM_TX) &&
-                   (outputDevices & AudioSystem::DEVICE_OUT_SPEAKER)) {
-            ALOGI("Routing audio to FM Tx and Speaker\n");
-            sndDevice = SND_DEVICE_FM_TX_AND_SPEAKER;
-            enableComboDevice(sndDevice,1);
-            audProcess = (ADRC_ENABLE | EQ_ENABLE | RX_IIR_ENABLE | MBADRC_ENABLE);
-        }
-#endif
         else if (outputDevices & AudioSystem::DEVICE_OUT_WIRED_HEADPHONE) {
             if (outputDevices & AudioSystem::DEVICE_OUT_SPEAKER) {
                 ALOGI("Routing audio to No microphone Wired Headset and Speaker (%d,%x)\n", mMode, outputDevices);
@@ -2537,13 +2508,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input, uint32_t outputDe
             sndDevice = SND_DEVICE_HANDSET;
             audProcess = (ADRC_ENABLE | EQ_ENABLE | RX_IIR_ENABLE | MBADRC_ENABLE);
         }
-#ifdef QCOM_FM_ENABLED
-         else if(outputDevices & AudioSystem::DEVICE_OUT_FM_TX){
-            ALOGI("Routing audio to FM Tx Device\n");
-            sndDevice = SND_DEVICE_FM_TX;
-            audProcess = (ADRC_ENABLE | EQ_ENABLE | RX_IIR_ENABLE | MBADRC_ENABLE);
-        }
-#endif
     }
 
     if (mDualMicEnabled && mMode == AudioSystem::MODE_IN_CALL) {
@@ -2582,33 +2546,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input, uint32_t outputDe
     }
 #endif
 
-#ifdef QCOM_FM_ENABLED
-    if ((outputDevices & AudioSystem::DEVICE_OUT_FM) && (mFmFd == -1)){
-        enableFM(sndDevice);
-    }
-    if ((mFmFd != -1) && !(outputDevices & AudioSystem::DEVICE_OUT_FM)){
-        disableFM();
-    }
-    if ((CurrentComboDeviceData.DeviceId == INVALID_DEVICE) &&
-        (sndDevice == SND_DEVICE_FM_TX_AND_SPEAKER )){
-        /* speaker rx is already enabled change snd device to the fm tx
-         * device and let the flow take the regular route to
-         * updatedeviceinfo().
-         */
-        Mutex::Autolock lock_1(mComboDeviceLock);
-
-        CurrentComboDeviceData.DeviceId = SND_DEVICE_FM_TX_AND_SPEAKER;
-        sndDevice = DEVICE_FMRADIO_STEREO_RX;
-    }
-    else if(CurrentComboDeviceData.DeviceId != INVALID_DEVICE){
-        /* time to disable the combo device */
-        enableComboDevice(CurrentComboDeviceData.DeviceId,0);
-        Mutex::Autolock lock_2(mComboDeviceLock);
-        CurrentComboDeviceData.DeviceId = INVALID_DEVICE;
-        CurrentComboDeviceData.StreamType = INVALID_STREAM;
-    }
-#endif
-
     if (sndDevice != -1 && sndDevice != mCurSndDevice) {
         ret = doAudioRouteOrMute(sndDevice);
         mCurSndDevice = sndDevice;
@@ -2617,104 +2554,6 @@ status_t AudioHardware::doRouting(AudioStreamInMSM72xx *input, uint32_t outputDe
     return ret;
 }
 #ifdef QCOM_FM_ENABLED
-status_t AudioHardware::enableComboDevice(uint32_t sndDevice, bool enableOrDisable)
-{
-    ALOGD("enableComboDevice %u",enableOrDisable);
-    status_t status = NO_ERROR;
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-    Routing_table *LpaNode = getNodeByStreamType(LPA_DECODE);
-#endif
-    Routing_table *PcmNode = getNodeByStreamType(PCM_PLAY);
-
-
-    if(SND_DEVICE_FM_TX_AND_SPEAKER == sndDevice){
-
-        if(getNodeByStreamType(VOICE_CALL) || getNodeByStreamType(FM_RADIO) ||
-           getNodeByStreamType(FM_A2DP)){
-            ALOGE("voicecall/FM radio active bailing out");
-            return NO_ERROR;
-        }
-
-        if(
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-         !LpaNode &&
-#endif
-         !PcmNode) {
-            ALOGE("No active playback session active bailing out ");
-            return NO_ERROR;
-        }
-
-        Mutex::Autolock lock_1(mComboDeviceLock);
-
-        Routing_table* temp = NULL;
-
-        if (enableOrDisable == 1) {
-
-            if(enableDevice(DEVICE_SPEAKER_RX, 1)) {
-                ALOGE("enableDevice failed for device %d", DEVICE_SPEAKER_RX);
-                return -1;
-            }
-
-
-            if(CurrentComboDeviceData.StreamType == INVALID_STREAM){
-                if (PcmNode){
-                    temp = PcmNode;
-                    CurrentComboDeviceData.StreamType = PCM_PLAY;
-                    ALOGD("PCM_PLAY session Active ");
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-                }else if(LpaNode){
-                    temp = LpaNode;
-                    CurrentComboDeviceData.StreamType = LPA_DECODE;
-                    ALOGD("LPA_DECODE session Active ");
-#endif
-                } else {
-                    ALOGE("no PLAYback session Active ");
-                    return -1;
-                }
-            }else
-                temp = getNodeByStreamType(CurrentComboDeviceData.StreamType);
-
-            if(temp == NULL){
-                ALOGE("null check:fatal error:temp cannot be null");
-                return -1;
-            }
-
-            ALOGD("combo:msm_route_stream(%d,%d,1)",temp->dec_id,
-                DEV_ID(DEVICE_SPEAKER_RX));
-            if(msm_route_stream(PCM_PLAY, temp->dec_id, DEV_ID(DEVICE_SPEAKER_RX),
-                1)) {
-                ALOGE("msm_route_stream failed");
-                return -1;
-            }
-
-        }else if(enableOrDisable == 0) {
-            temp = getNodeByStreamType(CurrentComboDeviceData.StreamType);
-
-
-            if(temp == NULL){
-                ALOGE("null check:fatal error:temp cannot be null");
-                return -1;
-            }
-
-            ALOGD("combo:de-route msm_route_stream(%d,%d,0)",temp->dec_id,
-                DEV_ID(DEVICE_SPEAKER_RX));
-            if(msm_route_stream(PCM_PLAY, temp->dec_id,
-                DEV_ID(DEVICE_SPEAKER_RX), 0)) {
-                ALOGE("msm_route_stream failed");
-                return -1;
-            }
-
-            if(enableDevice(DEVICE_SPEAKER_RX, 0)) {
-                ALOGE("enableDevice failed for device %d", DEVICE_SPEAKER_RX);
-                return -1;
-            }
-        }
-
-    }
-
-    return status;
-}
-
 status_t AudioHardware::enableFM(int sndDevice)
 {
     ALOGD("enableFM");
@@ -2874,25 +2713,6 @@ status_t AudioHardware::AudioSessionOutMSM7xxx::set(
         ALOGV("msm_route_stream(PCM_PLAY,%d,%d,0)",sessionId,DEV_ID(cur_rx));
         if(msm_route_stream(PCM_PLAY,sessionId,DEV_ID(cur_rx),1)) {
             ALOGE("msm_route_stream(PCM_PLAY,%d,%d,1) failed",sessionId,DEV_ID(cur_rx));
-        }
-
-        Mutex::Autolock lock_1(mComboDeviceLock);
-
-        if(CurrentComboDeviceData.DeviceId == SND_DEVICE_FM_TX_AND_SPEAKER){
-            ALOGD("Routing LPA steam to speaker for combo device");
-            ALOGD("combo:msm_route_stream(LPA_DECODE,session id:%d,dev id:%d,1)",sessionId,
-                DEV_ID(DEVICE_SPEAKER_RX));
-                /* music session is already routed to speaker in
-                 * enableComboDevice(), but at this point it can
-                 * be said that it was done with incorrect session id,
-                 * so re-routing with correct session id here.
-                 */
-            if(msm_route_stream(PCM_PLAY, sessionId, DEV_ID(DEVICE_SPEAKER_RX),
-               1)) {
-                ALOGE("msm_route_stream failed");
-                return -1;
-            }
-            CurrentComboDeviceData.StreamType = LPA_DECODE;
         }
 
         mSessionId = sessionId;
@@ -3149,41 +2969,6 @@ ssize_t AudioHardware::AudioStreamOutMSM72xx::write(const void* buffer, size_t b
                 ALOGE("msm_route_stream failed");
                 return 0;
             }
-#ifdef QCOM_FM_ENABLED
-            Mutex::Autolock lock_1(mComboDeviceLock);
-
-            if(CurrentComboDeviceData.DeviceId == SND_DEVICE_FM_TX_AND_SPEAKER){
-#ifdef QCOM_TUNNEL_LPA_ENABLED
-                Routing_table *LpaNode = getNodeByStreamType(LPA_DECODE);
-
-                /* This de-routes the LPA being routed on to speaker, which is done in
-                  * enablecombo()
-                  */
-                if(LpaNode == NULL){
-                    ALOGE("null check:fatal error:LpaNode cannot be null");
-                    return -1;
-                }
-                ALOGD("combo:de-route:msm_route_stream(%d,%d,0)",LpaNode ->dec_id,
-                    DEV_ID(DEVICE_SPEAKER_RX));
-                if(msm_route_stream(PCM_PLAY, LpaNode ->dec_id, DEV_ID(DEVICE_SPEAKER_RX),
-                    0)) {
-                    ALOGE("msm_route_stream failed");
-                    return -1;
-                }
-#endif
-
-                ALOGD("Routing PCM stream to speaker for combo device");
-                ALOGD("combo:msm_route_stream(PCM_PLAY,session id:%d,dev id:%d,1)",dec_id,
-                    DEV_ID(DEVICE_SPEAKER_RX));
-
-                if(msm_route_stream(PCM_PLAY, dec_id, DEV_ID(DEVICE_SPEAKER_RX),
-                    1)) {
-                    ALOGE("msm_route_stream failed");
-                    return -1;
-                }
-                CurrentComboDeviceData.StreamType = PCM_PLAY;
-            }
-#endif
             addToTable(dec_id,cur_rx,INVALID_DEVICE,PCM_PLAY,true);
             ioctl(mFd, AUDIO_START, 0);
         }
