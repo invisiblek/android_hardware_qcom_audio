@@ -50,10 +50,6 @@ LOCAL_SHARED_LIBRARIES := \
     libmedia        \
     libaudioalsa
 
-# hack for prebuilt
-$(shell mkdir -p $(OUT)/obj/SHARED_LIBRARIES/libaudioalsa_intermediates/)
-$(shell touch $(OUT)/obj/SHARED_LIBRARIES/libaudioalsa_intermediates/export_includes)
-
 ifeq ($(BOARD_USES_QCOM_AUDIO_CALIBRATION),true)
     LOCAL_SHARED_LIBRARIES += libaudcal
     LOCAL_CFLAGS += -DWITH_QCOM_CALIBRATION
