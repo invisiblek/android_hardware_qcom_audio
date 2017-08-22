@@ -501,15 +501,16 @@ void AudioPolicyManagerCustom::updateCallRouting(audio_devices_t rxDevice, int d
         // FIXME: would be better to refine to only inputs whose profile connects to the
         // call TX device but this information is not in the audio patch and logic here must be
         // symmetric to the one in startInput()
-        audio_io_handle_t activeInput = mInputs.getActiveInput();
-        if (activeInput != 0) {
-            sp<AudioInputDescriptor> activeDesc = mInputs.valueFor(activeInput);
-            if (activeDesc->getModuleHandle() == txSourceDeviceDesc->getModuleHandle()) {
-                //FIXME: consider all active sessions
-                AudioSessionCollection activeSessions = activeDesc->getActiveAudioSessions();
-                audio_session_t activeSession = activeSessions.keyAt(0);
-                stopInput(activeInput, activeSession);
-                releaseInput(activeInput, activeSession);
+        Vector<sp <AudioInputDescriptor>> activeInputs = mInputs.getActiveInputs();
+        for (size_t i = 0; i < activeInputs.size(); i++) {
+            sp<AudioInputDescriptor> activeDesc = activeInputs[i];
+            audio_devices_t newDevice = getNewInputDevice(activeDesc);
+            // Force new input selection if the new device can not be reached via current input
+            if (activeDesc->mProfile->getSupportedDevices().types()
+                    & (newDevice & ~AUDIO_DEVICE_BIT_IN)) {
+                setInputDevice(activeDesc->mIoHandle, newDevice);
+            } else {
+                closeInput(activeDesc->mIoHandle);
             }
         }
 
